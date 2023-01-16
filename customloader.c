@@ -1,53 +1,66 @@
-// Run managed code from the Unmanaged Land
-#include <stdio.h>
-#define CINTERFACE
-#define COBJMACROS
+#include "customloader.h"
 
-#include <metahost.h>
-#include <Unknwnbase.h>
-#pragma comment(lib, "mscoree.lib")
-int main(){
-    HRESULT result;
+ICLRMetaHost * metahost = NULL;
+IEnumUnknown * runtime = NULL;
+ICLRRuntimeInfo * runtimeinfo = NULL;
+ICLRRuntimeHost * runtimehost = NULL;
+
+void CleanUp(){
+    printf("[i] Performing Cleanup!\n");
     
-    // Interface for interacting with the CLR
-    // https://learn.microsoft.com/en-us/dotnet/framework/unmanaged-api/hosting/iclrmetahost-interface
-    ICLRMetaHost* pMetaHost = NULL;
+    if (runtime != NULL) {
+        IEnumUnknown_Release(runtime);
+    }
 
-    // Create instance of CLR
-    // https://learn.microsoft.com/en-us/dotnet/framework/unmanaged-api/hosting/clrcreateinstance-function
+    if (runtimeinfo != NULL) {
+        ICLRRuntimeInfo_Release(runtimeinfo);
+    }
+
+    if (runtimehost != NULL) {
+        ICLRRuntimeHost_Release(runtimehost);
+    }
+    
+    if (metahost != NULL){
+        ICLRMetaHost_Release(metahost);
+    }
+    printf("[i] Cleanup Done!\n");
+}
+
+HRESULT GetCLRInterface(){
+    DWORD count;
+    IUnknown *unk;
+    WCHAR buf[MAX_PATH];
+    HRESULT result = S_OK;
+
+    // Create instance of CLR Metahost for managing the versioning and loading of the CLR on a system. 
     // Also note that the C and C++ versions of the same will be different
-    // https://stackoverflow.com/questions/1351589/error-c2440-function-cannot-convert-from-const-iid-to-dword
     result = CLRCreateInstance(
                 &CLSID_CLRMetaHost,          // The CLSID_CLRMetaHost is used to create an instance of the CLRMetaHost class 
                 &IID_ICLRMetaHost,           // Corressponding RIID 
-                (LPVOID*)&pMetaHost);        // Interface
+                (LPVOID*)&metahost);        // Interface
 
     if (result != S_OK){
         fprintf(stderr, "[!] CLRCreateInstance() function failed (0x%x)\n", result);
-        return -1;
+        return result;
     }
-    printf("[i] Created CLR Instance\n");
+    printf("[i] Created CLR Metahost Instance\n");
 
     // Enumerate installed CLR runtimes
-    IEnumUnknown * runtime = NULL;
-    result = ICLRMetaHost_EnumerateInstalledRuntimes(pMetaHost, &runtime);
+    result = ICLRMetaHost_EnumerateInstalledRuntimes(metahost, &runtime);
     if (result != S_OK){
         fprintf(stderr, "[!] EnumerateInstalledRuntimes() function failed (0x%x)\n", result);
-        return -2;
+        return result;
     }
     printf("[i] Enumerated Runtimes\n"); 
 
     // Iterate over runtimes
-    DWORD count;
-    IUnknown *unk;
-    WCHAR buf[MAX_PATH];
-    ICLRRuntimeInfo *runtimeinfo;
-    // result = IEnumUnknown_Next(
-    //     runtime, 
-    //     1,              // Number of elements to retrieve
-    //     &unk,           // Pointer to an array of IUnknown pointers that will receive the elements
-    //     &count);        // Pointer to a ULONG variable that will receive the number of elements actually retrieved.
-    while((result = IEnumUnknown_Next(runtime, 1, &unk, 0)) == S_OK){
+    while((result = IEnumUnknown_Next(
+                                runtime,
+                                1,          // Number of elements to retrieve
+                                &unk,       // Pointer to an array of IUnknown pointers that will receive the elements
+                                0)          // Pointer to a ULONG variable that will receive the number of elements actually retrieved
+                            ) == S_OK){
+
         // Obtain a pointer to another interface on an object. 
         result = IUnknown_QueryInterface(
                     unk,                     // Pointer to the IUnknown interface of the object being queried.
@@ -69,7 +82,6 @@ int main(){
                 fprintf(stderr, "[!] ICLRRuntimeInfo_GetVersionString() Failed (0x%x)\n", result);
             }
         }   
-        
         IUnknown_Release(unk);
         break;
     }
@@ -79,11 +91,10 @@ int main(){
     ICLRRuntimeInfo_IsLoadable(runtimeinfo, &bLoadable);
     if (bLoadable == FALSE){
         fprintf(stderr, "[!] Specified version of CLR is not loadable\n");
-        return -7;
+        return OLEOBJ_S_INVALIDHWND;
     }
 
     // Get last supported runtime
-    ICLRRuntimeHost *runtimehost = NULL;
     result = ICLRRuntimeInfo_GetInterface(
         runtimeinfo,
         &CLSID_CLRRuntimeHost, 
@@ -92,33 +103,45 @@ int main(){
     
     if (result != S_OK){
         fprintf(stderr, "[!] ICLRRuntimeInfo_GetInterface() function failed (0x%x)\n", result);
-        return -3;
+        return result;
     }
 
     // Check runtime host
     if (count != 0 && NULL == runtimehost){
         fprintf(stderr, "[!] No Valid Runtime Found\n");
-        return -4;
+        return OLEOBJ_S_INVALIDHWND;
     }
+
     wprintf(L"[i] Using Runtime: %s\n", buf);
+    return result;
+};
+
+HRESULT StartRuntime(){
+    HRESULT result;
 
     // Start Runtime
     printf("[i] Starting Runtime\n");
     result =  ICLRRuntimeHost_Start(runtimehost);
     if (result != S_OK){
         fprintf(stderr, "[!] ICLRRuntimeHost_Start() function failed (0x%x)\n", result);
-        return -5;
+        return result;
     }
 
-    printf("\n[i] Entering Land of Managed Code\n");
+    return S_OK;
+};
+
+HRESULT RunAssembly(const LPCWSTR assembly_path, const LPCWSTR namespace_class, const LPCWSTR function_name, const LPCWSTR cmd_arguments){
+    HRESULT result;
     DWORD res = 0;
-    const LPCWSTR dll_path = L"C:\\Users\\whokilleddb\\Codes\\etw-patching-for-dummies\\misc\\helloworld.dll";
+    printf("\n[i] Entering Land of Managed Code\n");
+    
+    // Run Assembly
     result = ICLRRuntimeHost_ExecuteInDefaultAppDomain(
         runtimehost,
-        dll_path,
-        L"HelloWorld.Program",
-        L"EntryPoint",
-        L"Hello There(General Kenobi)",
+        assembly_path,
+        namespace_class,
+        function_name,
+        cmd_arguments,
         &res
     );
     if (result != S_OK){
@@ -126,24 +149,57 @@ int main(){
         if (result==0x80070002){
             fprintf(stderr, "[!] The speicified .NET assembly could not be found\n");
         }
-        return -6;
+        return result;
     }
     printf("[i] Exit Code: %d\n", res);
     printf("[i] Back to Unmanaged Land\n\n");
+    return S_OK;
+}
+
+HRESULT StopRuntime(){
+    HRESULT result;
 
     // Stop Runtime
     printf("[i] Stopping Runtime\n");
-    result =  ICLRRuntimeHost_Stop(runtimehost);
+    result = ICLRRuntimeHost_Stop(runtimehost);
     if (result != S_OK){
         fprintf(stderr, "[!] ICLRRuntimeHost_Stop() function failed (0x%x)\n", result);
-        return -6;
+        return result;
     }
 
-    printf("[i] Performing Cleanup!\n");
-    IEnumUnknown_Release(runtime);
-    ICLRRuntimeInfo_Release(runtimeinfo);
-    ICLRRuntimeHost_Release(runtimehost);
-    ICLRMetaHost_Release(pMetaHost);
-    printf("[i] Cleanup Done!\n");
+    return result;
+}
+
+int main(){
+    if (GetCLRInterface() != S_OK){
+        fprintf(stderr, "[!] Failed to get CLR interface!\n");
+        CleanUp();
+        return -1;
+    }
+
+    if (StartRuntime() != S_OK){
+        fprintf(stderr, "[!] Failed to Start runtime!\n");
+        CleanUp();
+        return -2;
+    }
+
+    if (RunAssembly(
+        L"C:\\Users\\whokilleddb\\Codes\\load-my-clr\\helloworld.dll",
+        L"HelloWorld.Program",
+        L"EntryPoint",
+        L"Hello There(General Kenobi)"
+    ) != S_OK){
+        fprintf(stderr, "[!] Failed to Run Assembly!\n");
+        CleanUp();
+        return -3;       
+    }
+
+    if (StopRuntime() != S_OK){
+        fprintf(stderr, "[!] Failed to Stop runtime!\n");
+        CleanUp();
+        return -4;
+    }
+
+    CleanUp();
     return 0;
 }
