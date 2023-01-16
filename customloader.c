@@ -130,7 +130,7 @@ HRESULT StartRuntime(){
     return S_OK;
 };
 
-HRESULT RunAssembly(const LPCWSTR assembly_path, const LPCWSTR namespace_class, const LPCWSTR function_name, const LPCWSTR cmd_arguments ){
+HRESULT RunAssembly(const LPCWSTR assembly_path, const LPCWSTR namespace_class, const LPCWSTR function_name, const LPCWSTR cmd_arguments){
     HRESULT result;
     DWORD res = 0;
     printf("\n[i] Entering Land of Managed Code\n");

@@ -9,6 +9,7 @@
 #pragma once
 
 void CleanUp();
-HRESULT CreateCLRInterface();
+HRESULT GetCLRInterface();
 HRESULT StartRuntime();
+HRESULT RunAssembly(const LPCWSTR assembly_path, const LPCWSTR namespace_class, const LPCWSTR function_name, const LPCWSTR cmd_arguments);
 HRESULT StopRuntime();
