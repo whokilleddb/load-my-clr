@@ -69,7 +69,7 @@ int main(){
                 fprintf(stderr, "[!] ICLRRuntimeInfo_GetVersionString() Failed (0x%x)\n", result);
             }
         }   
-        ICLRRuntimeInfo_Release(runtimeinfo);
+        
         IUnknown_Release(unk);
         break;
     }
