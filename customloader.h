@@ -1,7 +1,7 @@
 #include <stdio.h>
 #define CINTERFACE
 #define COBJMACROS
-
+#define PROGRAM_PATH L"C:\\Users\\whokilleddb\\Codes\\load-my-clr\\helloworld.dll"
 #include <metahost.h>
 #include <Unknwnbase.h>
 

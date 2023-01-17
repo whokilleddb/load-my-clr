@@ -184,10 +184,10 @@ int main(){
     }
 
     if (RunAssembly(
-        L"C:\\Users\\whokilleddb\\Codes\\load-my-clr\\helloworld.dll",
+        PROGRAM_PATH,
         L"HelloWorld.Program",
         L"EntryPoint",
-        L"Hello There(General Kenobi)"
+        L"Hello There (General Kenobi)"
     ) != S_OK){
         fprintf(stderr, "[!] Failed to Run Assembly!\n");
         CleanUp();
