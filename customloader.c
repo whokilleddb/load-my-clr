@@ -83,7 +83,6 @@ HRESULT GetCLRInterface(){
             }
         }   
         IUnknown_Release(unk);
-        break;
     }
 
     // Check if a specific version of the CLR is loadable on the current system
